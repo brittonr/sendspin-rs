@@ -102,11 +102,10 @@ impl ProtocolClient {
                 match result {
                     Ok(WsMessage::Text(text)) => {
                         log::debug!("Received text message: {}", text);
-                        let msg: Message =
-                            serde_json::from_str(&text).map_err(|e| {
-                                log::error!("Failed to parse server message: {}", e);
-                                Error::Protocol(e.to_string())
-                            })?;
+                        let msg: Message = serde_json::from_str(&text).map_err(|e| {
+                            log::error!("Failed to parse server message: {}", e);
+                            Error::Protocol(e.to_string())
+                        })?;
 
                         match msg {
                             Message::ServerHello(server_hello) => {
@@ -133,7 +132,10 @@ impl ProtocolClient {
                         return Err(Error::Connection("Server closed connection".to_string()));
                     }
                     Ok(other) => {
-                        log::warn!("Unexpected message type while waiting for hello: {:?}", other);
+                        log::warn!(
+                            "Unexpected message type while waiting for hello: {:?}",
+                            other
+                        );
                         continue;
                     }
                     Err(e) => {
@@ -179,7 +181,11 @@ impl ProtocolClient {
                     log::debug!("Received binary frame ({} bytes)", data.len());
                     match AudioChunk::from_bytes(&data) {
                         Ok(chunk) => {
-                            log::debug!("Parsed audio chunk: timestamp={}, data_len={}", chunk.timestamp, chunk.data.len());
+                            log::debug!(
+                                "Parsed audio chunk: timestamp={}, data_len={}",
+                                chunk.timestamp,
+                                chunk.data.len()
+                            );
                             let _ = audio_tx.send(chunk);
                         }
                         Err(e) => {

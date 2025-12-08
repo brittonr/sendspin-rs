@@ -13,9 +13,13 @@ tokio = { version = "1.40", features = ["full"] }
 tokio-tungstenite = "0.24"
 futures-util = "0.3"
 
+# Web server (for sendspin server)
+axum = { version = "0.8", features = ["ws"] }
+
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+base64 = "0.22"
 
 # Error handling
 thiserror = "1.0"
@@ -33,10 +37,39 @@ crossbeam = "0.8"
 # Fast mutexes
 parking_lot = "0.12"
 
+# Tracing (server logging)
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+
+# TUI
+ratatui = "0.29"
+crossterm = "0.28"
+
+# Audio decoding
+symphonia = { version = "0.5", features = ["mp3", "flac", "wav", "aac", "pcm", "isomp4"] }
+
 [dev-dependencies]
 tokio-test = "0.4"
 env_logger = "0.11"
-clap = { version = "4.5", features = ["derive"] }
+
+[[example]]
+name = "server"
+path = "examples/server.rs"
+
+[[bin]]
+name = "sendspin"
+path = "src/main.rs"
+
+[[bin]]
+name = "sendspin-server"
+path = "src/bin/server.rs"
+
+[[bin]]
+name = "sendspin-server-tui"
+path = "src/bin/server_tui.rs"
 
 [profile.release]
 opt-level = 3

@@ -3,7 +3,9 @@
 
 use clap::Parser;
 use sendspin::protocol::client::ProtocolClient;
-use sendspin::protocol::messages::{ClientHello, DeviceInfo, PlayerSupport, AudioFormatSpec, Message, PlayerUpdate};
+use sendspin::protocol::messages::{
+    AudioFormatSpec, ClientHello, DeviceInfo, Message, PlayerSupport, PlayerUpdate,
+};
 
 /// Minimal Sendspin test client
 #[derive(Parser, Debug)]

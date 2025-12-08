@@ -74,12 +74,23 @@ See [docs/rust-thoughts.md](docs/rust-thoughts.md) for detailed architecture and
 
 ## Development
 
+### Environment
+
+- Linux builds require `pkg-config` and ALSA development headers (`alsa-lib`).
+- `nix develop` provides these build inputs automatically if you prefer a reproducible setup.
+
 ```bash
 # Build
 cargo build
 
 # Run tests
 cargo test
+
+# Run the default client
+cargo run -- --server ws://localhost:8927/sendspin
+
+# Run via Nix
+nix run
 
 # Run examples
 cargo run --example basic_client

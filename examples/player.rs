@@ -164,8 +164,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start_buffer_ms = env_u64("RES_PLAY_START_BUFFER_MS", 500);
     let log_lead = env_bool("RES_LOG_LEAD");
 
-    println!("Player config: min_lead={}ms, start_buffer={}ms, log_lead={}",
-             min_lead_ms, start_buffer_ms, log_lead);
+    println!(
+        "Player config: min_lead={}ms, start_buffer={}ms, log_lead={}",
+        min_lead_ms, start_buffer_ms, log_lead
+    );
 
     // Message handling variables
     let mut decoder: Option<PcmDecoder> = None;
