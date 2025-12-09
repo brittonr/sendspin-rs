@@ -12,8 +12,9 @@ use std::time::Duration;
 use tokio::sync::watch;
 use tokio::time::{interval, MissedTickBehavior};
 
-/// Audio chunk type byte for player role (matches client expectation)
-const AUDIO_CHUNK_TYPE: u8 = 0x01;
+/// Audio chunk type byte for player role (per Sendspin Protocol spec)
+/// Spec: Binary message type 4 for player role audio chunks
+const AUDIO_CHUNK_TYPE: u8 = 0x04;
 
 /// Audio engine state
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

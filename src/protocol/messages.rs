@@ -55,9 +55,9 @@ pub enum Message {
     #[serde(rename = "client/goodbye")]
     ClientGoodbye(ClientGoodbye),
 
-    /// Player state update from client (legacy, use client/state)
-    #[serde(rename = "player/update")]
-    PlayerUpdate(PlayerUpdate),
+    /// Client request for format change (adaptive streaming)
+    #[serde(rename = "stream/request-format")]
+    StreamRequestFormat(StreamRequestFormat),
 }
 
 /// Client hello message
@@ -69,15 +69,15 @@ pub struct ClientHello {
     pub name: String,
     /// Protocol version number
     pub version: u32,
-    /// List of supported roles (e.g., "player", "metadata")
+    /// List of supported roles with versions (e.g., "player@v1", "metadata@v1")
     pub supported_roles: Vec<String>,
     /// Device information
     pub device_info: DeviceInfo,
-    /// Player capabilities (if client supports player role)
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Player@v1 capabilities (if client supports player@v1 role)
+    #[serde(rename = "player@v1_support", skip_serializing_if = "Option::is_none")]
     pub player_support: Option<PlayerSupport>,
-    /// Metadata capabilities (if client supports metadata role)
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Metadata@v1 capabilities (if client supports metadata@v1 role)
+    #[serde(rename = "metadata@v1_support", skip_serializing_if = "Option::is_none")]
     pub metadata_support: Option<MetadataSupport>,
 }
 
@@ -92,22 +92,14 @@ pub struct DeviceInfo {
     pub software_version: String,
 }
 
-/// Player capabilities
+/// Player capabilities (player@v1 support object per spec)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerSupport {
-    /// List of supported codecs (e.g., ["pcm", "opus"])
-    pub support_codecs: Vec<String>,
-    /// List of supported channel counts (e.g., [1, 2] for mono and stereo)
-    pub support_channels: Vec<u8>,
-    /// List of supported sample rates (e.g., [44100, 48000, 96000])
-    pub support_sample_rates: Vec<u32>,
-    /// List of supported bit depths (e.g., [16, 24, 32])
-    pub support_bit_depth: Vec<u8>,
-    /// List of supported audio formats
-    pub support_formats: Vec<AudioFormatSpec>,
-    /// Buffer capacity in chunks
+    /// List of supported audio formats in priority order (first is preferred)
+    pub supported_formats: Vec<AudioFormatSpec>,
+    /// Max size in bytes of compressed audio messages in the buffer yet to be played
     pub buffer_capacity: u32,
-    /// List of supported playback commands
+    /// List of supported playback commands (subset of: 'volume', 'mute')
     pub supported_commands: Vec<String>,
 }
 
@@ -193,28 +185,27 @@ pub struct StreamPlayerConfig {
     pub codec_header: Option<String>,
 }
 
-/// Server command message
+/// Server command message (server -> client)
+/// Per spec: server/command contains role-specific command objects
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerCommand {
-    /// Command name (e.g., "play", "pause", "stop")
-    pub command: String,
-    /// Optional volume level (0-100)
+    /// Player command (if client has player role)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub volume: Option<u8>,
-    /// Optional mute state
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub mute: Option<bool>,
+    pub player: Option<PlayerCommand>,
 }
 
-/// Player state update message
+/// Player command in server/command message
+/// Per spec: command must be one of supported_commands from client/hello
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PlayerUpdate {
-    /// Current playback state (e.g., "playing", "paused", "stopped")
-    pub state: String,
-    /// Current volume level (0-100)
-    pub volume: u8,
-    /// Whether audio is muted
-    pub muted: bool,
+pub struct PlayerCommand {
+    /// Command to execute: 'volume' or 'mute'
+    pub command: String,
+    /// Volume level (0-100) - only set if command is 'volume'
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub volume: Option<u8>,
+    /// Mute state - only set if command is 'mute'
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mute: Option<bool>,
 }
 
 /// Group update message (server -> client)
@@ -269,10 +260,59 @@ pub struct StreamEnd {
 }
 
 /// Client goodbye message (client -> server)
+/// Per spec: reason must be one of 'another_server', 'shutdown', 'restart', 'user_request'
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientGoodbye {
     /// Reason for disconnect
     pub reason: String,
+}
+
+/// Stream request format message (client -> server)
+/// Per spec: client requests a different stream format (adaptive streaming)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamRequestFormat {
+    /// Player format request (if client has player role)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub player: Option<PlayerFormatRequest>,
+    /// Artwork format request (if client has artwork role)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artwork: Option<ArtworkFormatRequest>,
+}
+
+/// Player format request in stream/request-format message
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlayerFormatRequest {
+    /// Requested codec: 'opus', 'flac', or 'pcm'
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub codec: Option<String>,
+    /// Requested number of channels
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channels: Option<u8>,
+    /// Requested sample rate in Hz
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sample_rate: Option<u32>,
+    /// Requested bit depth
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bit_depth: Option<u8>,
+}
+
+/// Artwork format request in stream/request-format message
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArtworkFormatRequest {
+    /// Artwork channel (0-3)
+    pub channel: u8,
+    /// Artwork source: 'album', 'artist', or 'none'
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// Image format: 'jpeg', 'png', or 'bmp'
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub format: Option<String>,
+    /// Maximum width in pixels
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub media_width: Option<u32>,
+    /// Maximum height in pixels
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub media_height: Option<u32>,
 }
 
 /// Server state message (server -> client)

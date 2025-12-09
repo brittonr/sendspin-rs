@@ -51,6 +51,9 @@ crossterm = "0.28"
 # Audio decoding
 symphonia = { version = "0.5", features = ["mp3", "flac", "wav", "aac", "pcm", "isomp4"] }
 
+# HTTP client for URL streaming (ureq is pure sync, no runtime conflicts)
+ureq = { version = "2.10", features = ["tls"] }
+
 [dev-dependencies]
 tokio-test = "0.4"
 env_logger = "0.11"

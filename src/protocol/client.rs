@@ -30,6 +30,57 @@ impl WsSender {
             .await
             .map_err(|e| Error::WebSocket(e.to_string()))
     }
+
+    /// Send client/goodbye before disconnecting
+    /// Per spec: reason must be one of 'another_server', 'shutdown', 'restart', 'user_request'
+    pub async fn send_goodbye(&self, reason: &str) -> Result<(), Error> {
+        use crate::protocol::messages::ClientGoodbye;
+        let msg = Message::ClientGoodbye(ClientGoodbye {
+            reason: reason.to_string(),
+        });
+        self.send_message(msg).await
+    }
+
+    /// Send stream/request-format to request a different audio format
+    /// Per spec: used for adaptive streaming based on network conditions
+    pub async fn request_player_format(
+        &self,
+        codec: Option<&str>,
+        sample_rate: Option<u32>,
+        channels: Option<u8>,
+        bit_depth: Option<u8>,
+    ) -> Result<(), Error> {
+        use crate::protocol::messages::{PlayerFormatRequest, StreamRequestFormat};
+        let msg = Message::StreamRequestFormat(StreamRequestFormat {
+            player: Some(PlayerFormatRequest {
+                codec: codec.map(|s| s.to_string()),
+                sample_rate,
+                channels,
+                bit_depth,
+            }),
+            artwork: None,
+        });
+        self.send_message(msg).await
+    }
+
+    /// Send client/state with player state update
+    /// Per spec: state must be 'synchronized' or 'error'
+    pub async fn send_player_state(
+        &self,
+        state: &str,
+        volume: Option<u8>,
+        muted: Option<bool>,
+    ) -> Result<(), Error> {
+        use crate::protocol::messages::{ClientState, PlayerState};
+        let msg = Message::ClientState(ClientState {
+            player: Some(PlayerState {
+                state: state.to_string(),
+                volume,
+                muted,
+            }),
+        });
+        self.send_message(msg).await
+    }
 }
 
 /// Audio chunk from server (binary frame)
@@ -48,7 +99,8 @@ impl AudioChunk {
             return Err(Error::Protocol("Audio chunk too short".to_string()));
         }
 
-        if frame[0] != 0x01 {
+        // Per spec: Binary message type 4 for player role audio chunks
+        if frame[0] != 0x04 {
             return Err(Error::Protocol("Invalid audio chunk type".to_string()));
         }
 
@@ -240,6 +292,57 @@ impl ProtocolClient {
         tx.send(WsMessage::Text(json))
             .await
             .map_err(|e| Error::WebSocket(e.to_string()))
+    }
+
+    /// Send client/goodbye before disconnecting
+    /// Per spec: reason must be one of 'another_server', 'shutdown', 'restart', 'user_request'
+    pub async fn send_goodbye(&self, reason: &str) -> Result<(), Error> {
+        use crate::protocol::messages::ClientGoodbye;
+        let msg = Message::ClientGoodbye(ClientGoodbye {
+            reason: reason.to_string(),
+        });
+        self.send_message(&msg).await
+    }
+
+    /// Send stream/request-format to request a different audio format
+    /// Per spec: used for adaptive streaming based on network conditions
+    pub async fn request_player_format(
+        &self,
+        codec: Option<&str>,
+        sample_rate: Option<u32>,
+        channels: Option<u8>,
+        bit_depth: Option<u8>,
+    ) -> Result<(), Error> {
+        use crate::protocol::messages::{PlayerFormatRequest, StreamRequestFormat};
+        let msg = Message::StreamRequestFormat(StreamRequestFormat {
+            player: Some(PlayerFormatRequest {
+                codec: codec.map(|s| s.to_string()),
+                sample_rate,
+                channels,
+                bit_depth,
+            }),
+            artwork: None,
+        });
+        self.send_message(&msg).await
+    }
+
+    /// Send client/state with player state update
+    /// Per spec: state must be 'synchronized' or 'error'
+    pub async fn send_player_state(
+        &self,
+        state: &str,
+        volume: Option<u8>,
+        muted: Option<bool>,
+    ) -> Result<(), Error> {
+        use crate::protocol::messages::{ClientState, PlayerState};
+        let msg = Message::ClientState(ClientState {
+            player: Some(PlayerState {
+                state: state.to_string(),
+                volume,
+                muted,
+            }),
+        });
+        self.send_message(&msg).await
     }
 
     /// Get reference to clock sync

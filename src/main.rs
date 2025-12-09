@@ -51,25 +51,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         client_id: uuid::Uuid::new_v4().to_string(),
         name: name.clone(),
         version: 1,
-        supported_roles: vec!["player".to_string()],
+        supported_roles: vec!["player@v1".to_string()],
         device_info: DeviceInfo {
             product_name: name.clone(),
             manufacturer: "Sendspin".to_string(),
             software_version: env!("CARGO_PKG_VERSION").to_string(),
         },
         player_support: Some(PlayerSupport {
-            support_codecs: vec!["pcm".to_string()],
-            support_channels: vec![2],
-            support_sample_rates: vec![48_000, 96_000, 192_000],
-            support_bit_depth: vec![16, 24],
-            support_formats: vec![AudioFormatSpec {
-                codec: "pcm".to_string(),
-                channels: 2,
-                sample_rate: 48_000,
-                bit_depth: 24,
-            }],
-            buffer_capacity: 100,
-            supported_commands: vec!["play".to_string(), "pause".to_string()],
+            supported_formats: vec![
+                AudioFormatSpec {
+                    codec: "pcm".to_string(),
+                    channels: 2,
+                    sample_rate: 48_000,
+                    bit_depth: 24,
+                },
+                AudioFormatSpec {
+                    codec: "pcm".to_string(),
+                    channels: 2,
+                    sample_rate: 96_000,
+                    bit_depth: 24,
+                },
+            ],
+            // Buffer capacity in bytes (per spec) - 200KB buffer
+            buffer_capacity: 200_000,
+            supported_commands: vec!["volume".to_string(), "mute".to_string()],
         }),
         metadata_support: None,
     };

@@ -5,6 +5,7 @@ mod audio_engine;
 mod audio_source;
 mod client_handler;
 mod client_manager;
+pub mod cli;
 mod clock;
 mod config;
 mod encoder;
@@ -13,7 +14,8 @@ mod server;
 pub mod tui;
 
 pub use audio_engine::AudioEngine;
-pub use audio_source::{AudioSource, FileSource, TestToneSource};
+pub use audio_source::{AudioSource, FileSource, TestToneSource, UrlSource};
+pub use cli::ServerArgs;
 pub use client_handler::handle_client;
 pub use client_manager::{ClientManager, ConnectedClient};
 pub use clock::ServerClock;

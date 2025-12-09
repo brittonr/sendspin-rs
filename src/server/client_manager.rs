@@ -153,6 +153,82 @@ impl ClientManager {
         }
     }
 
+    /// Send stream/clear to all player clients
+    /// Per spec: instructs clients to clear buffers without ending stream (for seek)
+    pub fn broadcast_stream_clear(&self, roles: Option<Vec<String>>) {
+        use crate::protocol::messages::{Message, StreamClear};
+
+        let msg = Message::StreamClear(StreamClear { roles });
+        if let Ok(json) = serde_json::to_string(&msg) {
+            let clients = self.clients.read();
+            for client in clients.values() {
+                if client.is_player() {
+                    let _ = client.send(ServerMessage::Text(json.clone()));
+                }
+            }
+            log::debug!("Broadcast stream/clear to {} player clients", clients.values().filter(|c| c.is_player()).count());
+        }
+    }
+
+    /// Send stream/end to all player clients
+    /// Per spec: ends the stream for specified roles, clients should stop output and clear buffers
+    pub fn broadcast_stream_end(&self, roles: Option<Vec<String>>) {
+        use crate::protocol::messages::{Message, StreamEnd};
+
+        let msg = Message::StreamEnd(StreamEnd { roles });
+        if let Ok(json) = serde_json::to_string(&msg) {
+            let clients = self.clients.read();
+            for client in clients.values() {
+                if client.is_player() {
+                    let _ = client.send(ServerMessage::Text(json.clone()));
+                }
+            }
+            log::debug!("Broadcast stream/end to {} player clients", clients.values().filter(|c| c.is_player()).count());
+        }
+    }
+
+    /// Send server/command with player command to a specific client
+    /// Per spec: command must be one of supported_commands from client/hello
+    pub fn send_player_command(&self, client_id: &str, command: &str, volume: Option<u8>, mute: Option<bool>) -> bool {
+        use crate::protocol::messages::{Message, ServerCommand, PlayerCommand};
+
+        let msg = Message::ServerCommand(ServerCommand {
+            player: Some(PlayerCommand {
+                command: command.to_string(),
+                volume,
+                mute,
+            }),
+        });
+
+        if let Ok(json) = serde_json::to_string(&msg) {
+            self.send_to_client(client_id, &json)
+        } else {
+            false
+        }
+    }
+
+    /// Broadcast server/command with player command to all player clients
+    pub fn broadcast_player_command(&self, command: &str, volume: Option<u8>, mute: Option<bool>) {
+        use crate::protocol::messages::{Message, ServerCommand, PlayerCommand};
+
+        let msg = Message::ServerCommand(ServerCommand {
+            player: Some(PlayerCommand {
+                command: command.to_string(),
+                volume,
+                mute,
+            }),
+        });
+
+        if let Ok(json) = serde_json::to_string(&msg) {
+            let clients = self.clients.read();
+            for client in clients.values() {
+                if client.is_player() {
+                    let _ = client.send(ServerMessage::Text(json.clone()));
+                }
+            }
+        }
+    }
+
     /// Get a list of all client IDs
     pub fn client_ids(&self) -> Vec<ClientId> {
         self.clients.read().keys().cloned().collect()

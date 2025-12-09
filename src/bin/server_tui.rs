@@ -2,56 +2,35 @@
 // ABOUTME: Interactive terminal UI showing real-time server stats and connected clients
 
 use clap::Parser;
-use sendspin::server::{SendspinServer, ServerConfig, ServerStats, TestToneSource, TuiApp};
-use std::net::SocketAddr;
+use sendspin::server::{SendspinServer, ServerArgs, ServerStats, TuiApp};
 use std::sync::Arc;
 
 #[derive(Parser, Debug)]
 #[command(name = "sendspin-server-tui")]
 #[command(author, version, about = "Sendspin streaming audio server with TUI", long_about = None)]
 struct Args {
-    /// Address to bind the server to
-    #[arg(short, long, default_value = "0.0.0.0:8927")]
-    bind: SocketAddr,
-
-    /// Server name
-    #[arg(short, long, default_value = "Sendspin Server")]
-    name: String,
-
-    /// WebSocket endpoint path
-    #[arg(long, default_value = "/sendspin")]
-    path: String,
-
-    /// Test tone frequency in Hz (0 for silence)
-    #[arg(short, long, default_value = "440.0")]
-    frequency: f64,
-
-    /// Sample rate in Hz
-    #[arg(short, long, default_value = "48000")]
-    sample_rate: u32,
-
-    /// Audio chunk interval in milliseconds
-    #[arg(long, default_value = "20")]
-    chunk_ms: u64,
-
-    /// Buffer ahead time in milliseconds
-    #[arg(long, default_value = "500")]
-    buffer_ahead_ms: u64,
+    #[command(flatten)]
+    server: ServerArgs,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let args = Args::parse();
 
+    // Initialize tracing
+    args.server.init_tracing();
+
     // Create audio source
-    let source = Box::new(TestToneSource::new(args.frequency.max(0.0), args.sample_rate));
+    let source = args.server.create_audio_source()?;
+
+    // Get sample rate from source for stats tracking
+    let actual_sample_rate = source.sample_rate();
+
+    // Log startup info (after source creation so sample rate is known)
+    args.server.log_startup_info();
 
     // Create server configuration
-    let config = ServerConfig::new(&args.name)
-        .bind_addr(args.bind)
-        .ws_path(args.path)
-        .chunk_interval_ms(args.chunk_ms)
-        .buffer_ahead_ms(args.buffer_ahead_ms);
+    let config = args.server.build_config();
 
     // Create server (takes ownership of config)
     let server = SendspinServer::with_config(config.clone()).with_source(source);
@@ -59,10 +38,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let config = Arc::new(config);
     let client_manager = server.client_manager();
 
-    // Create stats tracker
+    // Create stats tracker (use actual sample rate from audio source)
     let stats = Arc::new(parking_lot::Mutex::new(ServerStats::new(
-        args.sample_rate,
-        args.chunk_ms,
+        actual_sample_rate,
+        args.server.chunk_ms,
     )));
 
     // Spawn stats updater task (simulates audio chunk tracking)
@@ -84,9 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut tui_app = TuiApp::new(Arc::clone(&config), client_manager, Arc::clone(&stats));
 
     // Spawn server in background
-    let server_handle = tokio::spawn(async move {
-        server.run().await
-    });
+    let server_handle = tokio::spawn(async move { server.run().await });
 
     // Run TUI in foreground
     let tui_result = tui_app.run(&mut terminal);

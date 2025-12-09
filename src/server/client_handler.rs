@@ -265,7 +265,7 @@ fn negotiate_audio_format(client_hello: &ClientHello, config: &ServerConfig) -> 
     // Check client's supported formats
     if let Some(ref player_support) = client_hello.player_support {
         // Try to find PCM format first (most compatible)
-        for fmt in &player_support.support_formats {
+        for fmt in &player_support.supported_formats {
             if fmt.codec == "pcm" {
                 format.sample_rate = fmt.sample_rate;
                 format.channels = fmt.channels;
@@ -274,8 +274,8 @@ fn negotiate_audio_format(client_hello: &ClientHello, config: &ServerConfig) -> 
             }
         }
 
-        // Fall back to first supported format
-        if let Some(fmt) = player_support.support_formats.first() {
+        // Fall back to first supported format (client's preferred)
+        if let Some(fmt) = player_support.supported_formats.first() {
             format.codec = match fmt.codec.as_str() {
                 "opus" => Codec::Opus,
                 "flac" => Codec::Flac,
@@ -328,15 +328,53 @@ async fn handle_text_message(
         Message::ClientTime(client_time) => {
             handle_client_time(client_id, client_time, client_manager, clock);
         }
-        Message::PlayerUpdate(update) => {
-            log::debug!(
-                "Player {} state: {}, volume: {}, muted: {}",
+        Message::ClientState(state) => {
+            // Handle spec-compliant client/state message with player object
+            if let Some(player) = state.player {
+                log::debug!(
+                    "Player {} state: {}, volume: {:?}, muted: {:?}",
+                    client_id,
+                    player.state,
+                    player.volume,
+                    player.muted
+                );
+                // Update volume if provided (both must be present per spec when supported)
+                if let (Some(volume), Some(muted)) = (player.volume, player.muted) {
+                    client_manager.update_volume(client_id, volume, muted);
+                }
+            }
+        }
+        Message::ClientGoodbye(goodbye) => {
+            // Per spec: client is gracefully disconnecting
+            // Reasons: 'another_server', 'shutdown', 'restart', 'user_request'
+            log::info!(
+                "Client {} sent goodbye with reason: {}",
                 client_id,
-                update.state,
-                update.volume,
-                update.muted
+                goodbye.reason
             );
-            client_manager.update_volume(client_id, update.volume, update.muted);
+            // The client will be removed when the WebSocket closes
+            // Server can use reason to determine auto-reconnect behavior:
+            // - 'restart': auto-reconnect expected
+            // - 'another_server', 'shutdown', 'user_request': no auto-reconnect
+        }
+        Message::StreamRequestFormat(request) => {
+            // Per spec: client requests format change (adaptive streaming)
+            log::info!(
+                "Client {} requested format change: {:?}",
+                client_id,
+                request
+            );
+            // TODO: Implement format negotiation and send new stream/start
+            // For now, log the request - full implementation requires per-client encoding
+            if let Some(player_req) = request.player {
+                log::debug!(
+                    "Player format request - codec: {:?}, sample_rate: {:?}, channels: {:?}, bit_depth: {:?}",
+                    player_req.codec,
+                    player_req.sample_rate,
+                    player_req.channels,
+                    player_req.bit_depth
+                );
+            }
         }
         _ => {
             log::debug!("Unhandled message from {}: {:?}", client_id, msg);
